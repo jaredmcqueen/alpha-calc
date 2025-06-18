@@ -5,15 +5,15 @@
   "compatibility_date": "2025-04-10",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": ".output/public",
+    "directory": ".output/public"
   },
   "observability": {
-    "enabled": true,
+    "enabled": true
   },
   "kv_namespaces": [
     {
       "binding": "CACHE",
-      "id": "<Your KV ID>",
-    },
-  ],
+      "id": "<Your KV ID>"
+    }
+  ]
 }
