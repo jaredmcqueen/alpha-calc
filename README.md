@@ -1,72 +1,96 @@
-# Welcome to TanStack.com!
+# TanStack Start Beta on Cloudflare
 
-This site is built with TanStack Router!
+This project demonstrates how to get TanStack Start Beta running on Cloudflare. The transition from Alpha to Beta has made it significantly easier to deploy on Cloudflare infrastructure.
 
-- [TanStack Router Docs](https://tanstack.com/router)
+## Setup
 
-It's deployed automagically with Netlify!
+This repo was set up following the [TanStack Start Quick Start guide](https://tanstack.com/start/latest/docs/framework/react/quick-start).
 
-- [Netlify](https://netlify.com/)
+## Configuration
 
-## Development
+### 1. Vite Configuration
 
-From your terminal:
+Configure your `vite.config.ts` to use the `cloudflare-module` target for a compatible build:
 
-```sh
-pnpm install
-pnpm dev
+```ts
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { defineConfig } from "vite";
+import tsConfigPaths from "vite-tsconfig-paths";
+
+export default defineConfig({
+  server: {
+    port: 3000,
+  },
+  plugins: [
+    tsConfigPaths({
+      projects: ["./tsconfig.json"],
+    }),
+    tanstackStart({
+      target: "cloudflare-module", // Key configuration for Cloudflare compatibility
+    }),
+  ],
+});
 ```
 
-This starts your app in development mode, rebuilding assets on file changes.
+### 2. Bindings Helper
 
-## Editing and previewing the docs of TanStack projects locally
+Set up a bindings helper utility to access Cloudflare bindings in both development and production:
 
-The documentations for all TanStack projects except for `React Charts` are hosted on [https://tanstack.com](https://tanstack.com), powered by this TanStack Router app.
-In production, the markdown doc pages are fetched from the GitHub repos of the projects, but in development they are read from the local file system.
+```ts
+let cachedEnv: Env | null = null;
 
-Follow these steps if you want to edit the doc pages of a project (in these steps we'll assume it's [`TanStack/form`](https://github.com/tanstack/form)) and preview them locally :
+// This gets called once at startup when running locally
+const initDevEnv = async () => {
+  const { getPlatformProxy } = await import("wrangler");
+  const proxy = await getPlatformProxy();
+  cachedEnv = proxy.env as unknown as Env;
+};
 
-1. Create a new directory called `tanstack`.
+if (import.meta.env.DEV) {
+  await initDevEnv();
+}
 
-```sh
-mkdir tanstack
+export function getBindings(): Env {
+  if (import.meta.env.DEV) {
+    if (!cachedEnv) {
+      throw new Error(
+        "Dev bindings not initialized yet. Call initDevEnv() first.",
+      );
+    }
+    return cachedEnv;
+  }
+
+  return process.env as unknown as Env;
+}
 ```
 
-2. Enter the directory and clone this repo and the repo of the project there.
+The `getPlatformProxy` function allows you to access Cloudflare bindings when developing locally, providing a seamless development experience.
 
-```sh
-cd tanstack
-git clone git@github.com:TanStack/tanstack.com.git
-git clone git@github.com:TanStack/form.git
+## Usage
+
+### Accessing Bindings in Server Functions
+
+You can use the bindings helper in your server functions like this:
+
+```tsx
+const personServerFn = createServerFn({ method: "GET" })
+  .validator((d: string) => d)
+  .handler(async ({ data: name }) => {
+    const env = getBindings();
+    let growingAge = Number((await env.CACHE.get("age")) || 0);
+    growingAge++;
+    await env.CACHE.put("age", growingAge.toString());
+    return { name, randomNumber: growingAge };
+  });
 ```
 
-> [!NOTE]
-> Your `tanstack` directory should look like this:
->
-> ```
-> tanstack/
->    |
->    +-- form/
->    |
->    +-- tanstack.com/
-> ```
+## Environment Handling
 
-> [!WARNING]
-> Make sure the name of the directory in your local file system matches the name of the project's repo. For example, `tanstack/form` must be cloned into `form` (this is the default) instead of `some-other-name`, because that way, the doc pages won't be found.
+- **Development**: Bindings are accessed via `getPlatformProxy()` from Wrangler
+- **Production**: Bindings are accessed via `process.env`
 
-3. Enter the `tanstack/tanstack.com` directory, install the dependencies and run the app in dev mode:
+Currently, using `process.env as unknown as Env` is the best approach I've found to ensure your bindings are properly typed throughout your project. Looking for a better way to handle this type casting.
 
-```sh
-cd tanstack.com
-pnpm i
-# The app will run on https://localhost:3000 by default
-pnpm dev
-```
+## Notes
 
-4. Now you can visit http://localhost:3000/form/latest/docs/overview in the browser and see the changes you make in `tanstack/form/docs`.
-
-> [!NOTE]
-> The updated pages need to be manually reloaded in the browser.
-
-> [!WARNING]
-> You will need to update the `docs/config.json` file (in the project's repo) if you add a new doc page!
+The Beta version of TanStack Start has significantly improved Cloudflare compatibility compared to the Alpha version, making deployment and development much more straightforward.
